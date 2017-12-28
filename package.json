@@ -1,0 +1,27 @@
+{
+  "name": "cryptolio",
+  "version": "1.0.0",
+  "description": "Crypto Portfolio",
+  "main": "index.js",
+  "dependencies": {
+    "binance": "^1.1.2",
+    "coinbase": "^2.0.6",
+    "express": "^4.16.2",
+    "gdax": "github:coinbase/gdax-node",
+    "node-bittrex-api": "^0.8.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jameswong/cryptolio.git"
+  },
+  "author": "James Wong",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jameswong/cryptolio/issues"
+  },
+  "homepage": "https://github.com/jameswong/cryptolio#readme"
+}
