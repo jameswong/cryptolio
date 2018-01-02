@@ -2,6 +2,49 @@
 
 const accounts = require('./accounts.json');
 
+const Client = require('coinbase').Client;
+const coinbase = new Client(accounts.coinbase);
+
+coinbase.getAccountsAsync = function () {
+  return new Promise((resolve, reject) => {
+    coinbase.getAccounts({}, (err, accounts) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve (accounts);
+      }
+    });
+  });
+};
+coinbase.getTransactionsAsync = function (account, type) {
+  return new Promise((resolve, reject) => {
+    account.getTransactions(null, (err, txns) => {
+      if (err) {
+        reject(err);
+      } else {
+        var filtered = txns.reduce((acc, cur) => {
+          if (cur.type === type) {
+            acc.push(cur);
+          }
+          return acc;
+        }, []);
+        resolve(filtered);
+      }
+    });
+  });
+};
+coinbase.getBuysAsync = function (account) {
+  return new Promise((resolve, reject) => {
+    account.getBuys(null, (err, buys) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(buys);
+      }
+    });
+  });
+};
+
 const bittrex = require('node-bittrex-api');
 bittrex.options({
   apikey: accounts.bittrex.apiKey,
@@ -30,6 +73,17 @@ bittrex.getmarketsummariesAsync = function (symbol) {
     });
   });
 };
+bittrex.getorderhistoryAsync = function () {
+  return new Promise((resolve, reject) => {
+    bittrex.getorderhistory({}, (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data);
+      }
+    });
+  });
+};
 
 const AuthenticatedClient = require('gdax').AuthenticatedClient;
 const gdax = new AuthenticatedClient(accounts.gdax.apiKey, accounts.gdax.apiSecret, accounts.gdax.passphrase);
@@ -39,118 +93,6 @@ const binance = new BinanceRest({
   key: accounts.binance.apiKey,
   secret: accounts.binance.apiSecret
 });
-
-function getAllAccounts() {
-  return Promise.all([
-    gdax.getCoinbaseAccounts(),
-    gdax.getAccounts(),
-    bittrex.getbalancesAsync(),
-    binance.account()
-  ])
-  .then(accounts => {
-    var [coinbase, gdax, bittrex, binance] = accounts;
-    var result = {
-      coinbase: formatCoinbase(coinbase),
-      gdax: formatCoinbase(gdax),
-      bittrex: formatBittrex(bittrex),
-      binance: formatBinance(binance)
-    };
-    var total = {};
-    for (const exchange in result) {
-      result[exchange].reduce((acc, cur) => {
-        if (acc[cur.currency]) {
-          acc[cur.currency].balance += cur.balance;
-        } else {
-          acc[cur.currency] = {};
-          acc[cur.currency].balance = cur.balance;
-        }
-        return acc;
-      }, total);
-    }
-    result.total = total;
-    return result;
-  })
-  .then(accounts => {
-    return Promise.all([
-      gdax.getProductTicker('BTC-USD'),
-      gdax.getProductTicker('BCH-USD'),
-      gdax.getProductTicker('ETH-USD'),
-      gdax.getProductTicker('LTC-USD'),
-      bittrex.getmarketsummariesAsync(),
-      binance.allPrices(),
-      accounts.total
-    ]);
-  })
-  .then(tickers => {
-    var [btc, bch, eth, ltc, bittrexAll, binanceAll, accounts] = tickers;
-    var prices = {};
-    prices.BTCUSD = { price: parseFloat(btc.price), source: 'gdax' };
-    prices.BCHUSD = { price: parseFloat(bch.price), source: 'gdax' };
-    prices.ETHUSD = { price: parseFloat(eth.price), source: 'gdax' };
-    prices.LTCUSD = { price: parseFloat(ltc.price), source: 'gdax' };
-    binanceAll.reduce((acc, cur) => {
-      if (cur.symbol.match(/BTC$/)) {
-        acc[cur.symbol] = { price: parseFloat(cur.price), source: 'binance' };
-      }
-      return acc;
-    }, prices);
-    bittrexAll.result.reduce((acc, cur) => {
-      if (cur.MarketName.match(/^BTC/)) {
-        var name = cur.MarketName.split('-')[1] + 'BTC';
-        if (!acc[name] || (acc[name] && acc[name].price < cur.Last)) {
-          acc[name] = { price: cur.Last, source: 'bittrex' };
-        }
-      }
-      return acc;
-    }, prices)
-
-    var total = { USD: 0, BTC: 0 };
-    for (const currency in accounts) {
-      switch (currency) {
-        case 'USD':
-          total.USD += accounts['USD'].balance;
-          break;
-        case 'BTC':
-          total.BTC += accounts['BTC'].balance;
-          accounts[currency].USD = prices[currency + 'USD']
-          accounts[currency]['usd-value'] = accounts[currency].balance * prices[currency + 'USD'].price
-          break;
-        case 'BCH':
-        case 'ETH':
-        case 'LTC':
-          accounts[currency].USD = prices[currency + 'USD']
-          accounts[currency]['usd-value'] = accounts[currency].balance * prices[currency + 'USD'].price
-          total.USD += accounts[currency]['usd-value'];
-          break;
-        default:
-          accounts[currency].BTC = prices[currency + 'BTC']
-          accounts[currency]['btc-value'] = accounts[currency].balance * prices[currency + 'BTC'].price
-          accounts[currency]['usd-value'] = accounts[currency]['btc-value'] * prices['BTCUSD'].price
-          total.BTC += accounts[currency]['btc-value'];
-      }
-    }
-
-    total.USD += (total.BTC * prices['BTCUSD'].price);
-    return {
-      total: total,
-      accounts: accounts
-    };
-  });
-};
-
-function formatCoinbase(accounts) {
-  var result = [];
-  accounts.forEach(account => {
-    var balance = parseFloat(account.balance);
-    if (balance > 0) {
-      result.push({
-        currency: account.currency,
-        balance: balance
-      })
-    }
-  });
-  return result;
-};
 
 function formatBittrex(accounts) {
   var result = [];
@@ -175,11 +117,237 @@ function formatBinance(accounts) {
       result.push({
         currency: account.asset,
         balance: free + locked
-      })
+      });
     }
   });
   return result;
 };
+
+function getBinanceAccount() {
+  return Promise.all([
+    binance.account(),
+    binance.allPrices(),
+  ])
+  .then(data => {
+    var [account, prices] = data;
+    account = formatBinance(account);
+    prices = prices.reduce((acc, cur) => {
+      if (cur.symbol.match(/BTC$/)) {
+        acc[cur.symbol] = { price: parseFloat(cur.price) };
+      }
+      return acc;
+    }, {});
+    var requests = [account];
+    account.forEach(item => {
+      if (item.currency !== 'BTC') {
+        requests.push(binance.myTrades(item.currency + 'BTC'));
+        item.BTC = { price: prices[item.currency + 'BTC'].price }
+      }
+    });
+    return Promise.all(requests);
+  })
+  .then(data => {
+    var account = data.shift();
+    for (var i = 0; i < data.length; i++) {
+      account[i+1].BTC.average = getWeightedAverage(data[i], 'price', 'qty');
+    }
+    return account;
+  })
+}
+
+function getBittrexAccount() {
+  return Promise.all([
+    bittrex.getbalancesAsync(),
+    bittrex.getorderhistoryAsync(),
+    bittrex.getmarketsummariesAsync()
+  ])
+  .then(data => {
+    var [account, order, prices] = data;
+    account = formatBittrex(account);
+    order = order.result.reduce((acc, cur) => {
+      if (!acc[cur.Exchange]) {
+        acc[cur.Exchange] = [];
+      }
+      acc[cur.Exchange].push(cur);
+      return acc;
+    }, {});
+    prices = prices.result.reduce((acc, cur) => {
+      if (cur.MarketName.match(/^BTC/)) {
+        var name = cur.MarketName.split('-')[1] + 'BTC';
+        if (!acc[name] || (acc[name] && acc[name].price < cur.Last)) {
+          acc[name] = { price: cur.Last };
+        }
+      }
+      return acc;
+    }, {});
+    account.forEach(item => {
+      if (item.currency !== 'BTC') {
+        item.BTC = { price: prices[item.currency + 'BTC'].price };
+        if (order['BTC-' + item.currency]) {
+          item.BTC.average = getWeightedAverage(order['BTC-' + item.currency], 'PricePerUnit', 'Quantity');
+        }
+      }
+    });
+    return account;
+  })
+}
+
+function getCoinbaseAccount() {
+  function sortAccounts(accounts) {
+    var order = ['USD', 'BTC', 'BCH', 'ETH', 'LTC'];
+    return accounts.sort((a, b) => {
+      var aIndex = order.indexOf(a.currency);
+      var bIndex = order.indexOf(b.currency);
+      return aIndex - bIndex;
+    });
+  }
+  return Promise.all([
+    coinbase.getAccountsAsync().then(sortAccounts),
+    gdax.getAccounts().then(sortAccounts),
+    gdax.getProductTicker('BTC-USD'),
+    gdax.getProductTicker('BCH-USD'),
+    gdax.getProductTicker('ETH-USD'),
+    gdax.getProductTicker('LTC-USD')
+  ])
+  .then(accounts => {
+    var [coinbaseAccounts, gdaxAccounts, btc, bch, eth, ltc] = accounts;
+    var usdPrice = {
+      BTC: btc,
+      BCH: bch,
+      ETH: eth,
+      LTC: ltc
+    };
+    var requests = [accounts, usdPrice];
+    for (let i = 1; i < coinbaseAccounts.length; i++) {
+      requests.push(coinbase.getBuysAsync(coinbaseAccounts[i]));
+    }
+    requests.push(gdax.getFills());
+    return Promise.all(requests);
+  })
+  .then(data => {
+    var [accounts, usdPrice, btc, bch, eth, ltc, fills] = data;
+    var orders = {};
+    function normalize(buys) {
+      return buys.map(function (buy) {
+        return { price: parseFloat(buy.subtotal.amount), size: parseFloat(buy.amount.amount) };
+      });
+    };
+    orders.BTC = normalize(btc);
+    orders.BCH = normalize(bch);
+    orders.ETH = normalize(eth);
+    orders.LTC = normalize(ltc);
+    fills.reduce((acc, cur) => {
+      var name = cur.product_id.split('-')[0];
+      if (!acc[name]) {
+        acc[name] = [];
+      }
+      acc[name].push({
+        price: parseFloat(cur.price),
+        size: parseFloat(cur.size)
+      });
+      return acc;
+    }, orders);
+    var [coinbaseAccounts, gdaxAccounts] = accounts;
+    var result = [];
+    for (let i = 0; i < coinbaseAccounts.length; i++) {
+      var item = {
+        currency: coinbaseAccounts[i].currency,
+        balance: parseFloat(coinbaseAccounts[i].balance.amount) + parseFloat(gdaxAccounts[i].balance),
+      };
+      if (usdPrice[item.currency]) {
+        item.USD = { price: parseFloat(usdPrice[item.currency].price) };
+        if (orders[item.currency]) {
+          item.USD.average = getWeightedAverage(orders[item.currency]);
+        }
+      }
+      result.push(item);
+    }
+    return result;
+  })
+}
+
+function getWeightedAverage(trades, keyPrice = 'price', keyQuantity = 'size') {
+  var { total, quantity } = trades.reduce((acc, cur) => {
+    var price = cur[keyPrice];
+    var qty = cur[keyQuantity];
+    price = parseFloat(price);
+    qty = parseFloat(qty);
+    acc.total += price * qty;
+    acc.quantity += qty;
+    return acc;
+  }, { total: 0, quantity: 0 });
+  return total / quantity;
+}
+
+function getAllAccounts() {
+  return Promise.all([
+    getCoinbaseAccount(),
+    getBittrexAccount(),
+    getBinanceAccount()
+  ])
+  .then(data => {
+    var [coinbase, bittrex, binance] = data;
+    var accounts = {
+      coinbase: coinbase,
+      bittrex: bittrex,
+      binance: binance
+    };
+    var total = {
+      value: {
+        USD: 0,
+        BTC: 0
+      }
+    };
+    for (const name in accounts) {
+      accounts[name].reduce((acc, cur) => {
+        var currency = acc[cur.currency] || { balance: 0 };
+        if (cur.currency === 'USD') {
+          total.value.USD += cur.balance;
+        }
+        if (cur.currency === 'BTC') {
+          total.value.BTC += cur.balance;
+        }
+        if (cur.USD) {
+          currency.USD = Object.assign({}, cur.USD);
+          currency.USD.source = name;
+          total.value.USD += cur.balance * cur.USD.price;
+          currency['usd-value'] = cur.balance * cur.USD.price;
+        }
+        if (cur.BTC) {
+          total.value.BTC += cur.balance * cur.BTC.price;
+          if (!currency.BTC) {
+            currency.BTC = Object.assign({}, cur.BTC);
+            currency.BTC.source = name;
+            currency['btc-value'] = 0;
+            currency['usd-value'] = 0;
+          } else {
+            if (cur.BTC.price > currency.BTC.price) {
+              currency.BTC.price = cur.BTC.price;
+              currency.BTC.source = name;
+            }
+            currency.BTC.average = ((cur.BTC.average * cur.balance) + (currency.BTC.average * currency.balance)) / (cur.balance + currency.balance);
+          }
+          currency['btc-value'] += cur.balance * cur.BTC.price;
+          currency['usd-value'] = currency['btc-value'] * acc.BTC.USD.price;
+          total.value.USD += currency['usd-value'];
+        }
+        if (cur.currency === 'BTC' && !cur.USD) {
+          currency['usd-value'] += cur.balance * acc.BTC.USD.price;
+          total.value.USD += cur.balance * acc.BTC.USD.price;
+        }
+        currency.balance += cur.balance;
+        acc[cur.currency] = currency;
+        return acc;
+      }, total);
+    }
+    return {
+      total: total,
+      coinbase: coinbase,
+      bittrex: bittrex,
+      binance: binance
+    };
+  });
+}
 
 module.exports = {
   getAllAccounts: getAllAccounts
