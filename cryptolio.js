@@ -94,6 +94,9 @@ const binance = new BinanceRest({
   secret: accounts.binance.apiSecret
 });
 
+const XCoinApi = require('./bithumb').XCoinAPI;
+const bithumb = new XCoinApi(accounts.bithumb);
+
 function formatBittrex(accounts) {
   var result = [];
   accounts.result.forEach(account => {
@@ -283,14 +286,16 @@ function getAllAccounts() {
   return Promise.all([
     getCoinbaseAccount(),
     getBittrexAccount(),
-    getBinanceAccount()
+    getBinanceAccount(),
+    bithumb.getAccount()
   ])
   .then(data => {
-    var [coinbase, bittrex, binance] = data;
+    var [coinbase, bittrex, binance, bithumb] = data;
     var accounts = {
       coinbase: coinbase,
       bittrex: bittrex,
-      binance: binance
+      binance: binance,
+      bithumb: bithumb
     };
     var total = {
       value: {
@@ -344,7 +349,8 @@ function getAllAccounts() {
       total: total,
       coinbase: coinbase,
       bittrex: bittrex,
-      binance: binance
+      binance: binance,
+      bithumb: bithumb
     };
   });
 }
