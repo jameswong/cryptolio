@@ -8,6 +8,7 @@
     "coinbase": "github:coinbase/coinbase-node",
     "express": "^4.16.2",
     "gdax": "github:coinbase/gdax-node",
+    "kucoin-api": "0.0.3",
     "node-bittrex-api": "^0.8.1"
   },
   "devDependencies": {},

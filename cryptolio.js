@@ -97,6 +97,45 @@ const binance = new BinanceRest({
 const XCoinApi = require('./bithumb').XCoinAPI;
 const bithumb = new XCoinApi(accounts.bithumb);
 
+const Kucoin = require('kucoin-api');
+const kucoin = new Kucoin(accounts.kucoin.apiKey, accounts.kucoin.apiSecret);
+
+function getKucoinAccount() {
+  return kucoin.getBalance()
+    .then(balance => {
+      var tickers = [];
+      var orders = [];
+      var data = balance.data.reduce((acc, cur) => {
+        if (cur.balance > 0) {
+          acc.push({
+            currency: cur.coinType,
+            balance: cur.balance
+          });
+          if (cur.coinType !== 'BTC') {
+            tickers.push(kucoin.getTicker({ pair: cur.coinType + '-BTC' }));
+            orders.push(kucoin.getDealtOrders({ pair: cur.coinType + '-BTC', type: 'BUY' }));
+          }
+        }
+        return acc;
+      }, []);
+      return Promise.all([
+        data,
+        Promise.all(tickers),
+        Promise.all(orders)
+      ]);
+    })
+    .then(data => {
+      var [account, tickers, orders] = data;
+      for (var i = 0; i < tickers.length; i++) {
+        account[i].BTC = {
+          price: tickers[i].data.lastDealPrice,
+          average: orders[i].data.datas[0].dealPrice
+        }
+      }
+      return account;
+    })
+}
+
 function formatBittrex(accounts) {
   var result = [];
   accounts.result.forEach(account => {
@@ -287,15 +326,17 @@ function getAllAccounts() {
     getCoinbaseAccount(),
     getBittrexAccount(),
     getBinanceAccount(),
-    bithumb.getAccount()
+    bithumb.getAccount(),
+    getKucoinAccount()
   ])
   .then(data => {
-    var [coinbase, bittrex, binance, bithumb] = data;
+    var [coinbase, bittrex, binance, bithumb, kucoin] = data;
     var accounts = {
       coinbase: coinbase,
       bittrex: bittrex,
       binance: binance,
-      bithumb: bithumb
+      bithumb: bithumb,
+      kucoin: kucoin
     };
     var total = {
       value: {
@@ -350,7 +391,8 @@ function getAllAccounts() {
       coinbase: coinbase,
       bittrex: bittrex,
       binance: binance,
-      bithumb: bithumb
+      bithumb: bithumb,
+      kucoin: kucoin
     };
   });
 }
