@@ -111,7 +111,10 @@ function getKucoinAccount() {
             currency: cur.coinType,
             balance: cur.balance
           });
-          if (cur.coinType !== 'BTC') {
+          if (cur.coinType.match(/BTC|USDT/)) {
+            tickers.push(null);
+            orders.push(null);
+          } else {
             tickers.push(kucoin.getTicker({ pair: cur.coinType + '-BTC' }));
             orders.push(kucoin.getDealtOrders({ pair: cur.coinType + '-BTC', type: 'BUY' }));
           }
@@ -127,9 +130,16 @@ function getKucoinAccount() {
     .then(data => {
       var [account, tickers, orders] = data;
       for (var i = 0; i < tickers.length; i++) {
-        account[i].BTC = {
-          price: tickers[i].data.lastDealPrice,
-          average: orders[i].data.datas[0].dealPrice
+        if (tickers[i]) {
+          var price = tickers[i].data.lastDealPrice;
+          var average = price;
+          if (orders[i].data.datas[0]) {
+            average = orders[i].data.datas[0].dealPrice;
+          }
+          account[i].BTC = {
+            price: price,
+            average: average
+          };
         }
       }
       return account;
@@ -397,6 +407,66 @@ function getAllAccounts() {
   });
 }
 
+function arbitrage() {
+  return Promise.all([
+      getGdaxPrice(),
+      getBithumbPrice()
+    ])
+    .then(data => {
+      var result = {};
+      var [cbPrice, btPrice] = data;
+      ['ETH', 'LTC'].forEach(value => {
+        result[value] = {};
+        result[value].difference = btPrice[value]['btc-price'] - cbPrice[value]['btc-price'];
+        result[value].percentage = result[value].difference / cbPrice[value]['btc-price'] * 100;
+      });
+      return {
+        arbitrage: result,
+        coinbase: cbPrice,
+        bithumb: btPrice
+      }
+    });
+}
+
+function getGdaxPrice() {
+  return Promise.all([
+    gdax.getProductTicker('ETH-BTC'),
+    gdax.getProductTicker('LTC-BTC')
+  ])
+  .then(data => {
+    var [eth, ltc] = data;
+    var prices = {};
+    prices.ETH = {
+      'btc-price': parseFloat(eth.price)
+    };
+    prices.LTC = {
+      'btc-price': parseFloat(ltc.price)
+    };
+    return prices;
+  });
+}
+
+function getBithumbPrice() {
+  return bithumb.getTicker()
+    .then(data => {
+      var prices = {}
+      data = data.data;
+      prices.BTC = {
+        'krw-price': parseFloat(data.BTC.buy_price)
+      };
+      prices.ETH = {
+        'krw-price': parseFloat(data.ETH.buy_price)
+      };
+      prices.ETH['btc-price'] = prices.ETH['krw-price'] / prices.BTC['krw-price'];
+      prices.LTC = {
+        'krw-price': parseFloat(data.LTC.buy_price)
+      };
+      prices.LTC['btc-price'] = prices.LTC['krw-price'] / prices.BTC['krw-price'];
+      return prices;
+    });
+}
+
 module.exports = {
-  getAllAccounts: getAllAccounts
+  getAllAccounts: getAllAccounts,
+  arbitrage: arbitrage
 };

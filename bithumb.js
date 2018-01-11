@@ -96,6 +96,10 @@ XCoinAPI.prototype.getBalance = function () {
 	return this.xcoinApiCall('/info/balance', rgParams);
 }
 
+XCoinAPI.prototype.getTicker = function (ticker = 'ALL') {
+	return this.xcoinApiCall('/public/ticker/' + ticker);
+}
+
 XCoinAPI.prototype._getHttpHeaders = function(endPoint, rgParams, api_key, api_secret) {
 	var strData	= http_build_query(rgParams);
 	var nNonce = this.usecTime();
