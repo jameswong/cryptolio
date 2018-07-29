@@ -1,4 +1,4 @@
-console.log('hi');
+console.log('hi')
 window.onload = function () {
-  console.log('loaded');
+  console.log('loaded')
 }
