@@ -336,7 +336,7 @@ function getAllAccounts () {
     getCoinbaseAccount(),
     getBittrexAccount(),
     getBinanceAccount(),
-    bithumb.getAccount(),
+    // bithumb.getAccount(),
     getKucoinAccount()
   ])
     .then(data => {
@@ -345,7 +345,7 @@ function getAllAccounts () {
         coinbase: coinbase,
         bittrex: bittrex,
         binance: binance,
-        bithumb: bithumb,
+        // bithumb: bithumb,
         kucoin: kucoin
       }
       var total = {
@@ -401,7 +401,7 @@ function getAllAccounts () {
         coinbase: coinbase,
         bittrex: bittrex,
         binance: binance,
-        bithumb: bithumb,
+        // bithumb: bithumb,
         kucoin: kucoin
       }
     })
